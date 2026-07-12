@@ -40,18 +40,43 @@ The first working slice is a responsive dashboard with overview KPIs and a backe
 
 ## Local Production Run
 
-1. Build the client and server with `npm run build`.
-2. Start the production server with `npm start`.
-3. Open `http://localhost:4000` to use the hosted UI and API on the same origin.
-4. `prisma generate` runs on install now, so hosted builds only need the compile step.
+1. Set `DATABASE_URL` to a live PostgreSQL connection string, ideally your Neon free database.
+2. Build the client and server with `npm run build`.
+3. Start the production server with `npm start`.
+4. Open `http://localhost:4000` to use the hosted UI and API on the same origin.
 
-## Online Hosting
+## Single Render App + Neon Database
 
-Recommended setup:
+This repository is structured for one Render web service plus one Neon PostgreSQL database.
 
-1. Deploy as one Node service so the Express server serves both the API and the built React app.
-2. Set `NODE_ENV=production`, `PORT`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and optionally `CORS_ORIGIN`.
-3. Run `npm run build` during deploy, then `npm start` as the launch command.
-4. If you want a separate frontend host later, set `VITE_API_BASE_URL` on the client deployment and keep the API service on a stable public URL.
+### What Runs Where
 
-If you want the cleanest online deployment path, the next step is to add a Dockerfile and a simple render/railway config so the same repo can be pushed straight to a host.
+1. Render runs the Node/Express app.
+2. The Express app serves the built React frontend from `client/dist`.
+3. Neon stores the Prisma data.
+
+### Deploy Steps
+
+1. Create a free Neon project and copy the PostgreSQL connection string.
+2. Create a new Render web service from this repo.
+3. Set the Render build command to `npm install && npm run build`.
+4. Set the Render start command to `npm start`.
+5. Add environment variables in Render:
+	- `DATABASE_URL` = Neon connection string
+	- `ADMIN_EMAIL` = your first admin login email
+	- `ADMIN_PASSWORD` = a strong password
+	- `AUTH_SECRET` = a long random secret
+	- `NODE_ENV` = `production`
+6. Keep the free plan database on Neon, not inside Render.
+7. After the first deploy, seed or push the Prisma schema to Neon.
+
+### Prisma Setup
+
+1. The Prisma datasource is PostgreSQL.
+2. Run `npx prisma db push` against the Neon database for the first schema sync.
+3. `prisma generate` runs automatically on install through the server `postinstall` script.
+
+### Notes
+
+1. This is the simplest free stack for the current codebase.
+2. If you later want separate frontend hosting, you can move the client to Vercel and keep the API on Render.
