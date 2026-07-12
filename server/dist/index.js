@@ -8,6 +8,7 @@ import { prisma } from './lib/prisma.js';
 import { hashPassword } from './lib/security.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerOverviewRoutes } from './routes/overview.js';
+import { registerReportRoutes } from './routes/reports.js';
 const app = express();
 const port = Number(process.env.PORT ?? 4000);
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -19,6 +20,7 @@ app.use(cors({
 app.use(express.json());
 registerAuthRoutes(app);
 registerOverviewRoutes(app);
+registerReportRoutes(app);
 if (existsSync(clientDistPath)) {
     app.use(express.static(clientDistPath));
     app.get('*', (_request, response, next) => {

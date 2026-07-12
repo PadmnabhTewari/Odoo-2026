@@ -3,14 +3,16 @@ import type { FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiRequest } from '../lib/api';
 import { getStoredToken, storeSession } from '../lib/session';
+import type { EmployeeRole } from '../types/assetflow';
 
 type AuthResponse = {
   employee: {
     id: string;
     name: string;
     email: string;
-    role: string;
+    role: EmployeeRole;
     status: string;
+    departmentId: string | null;
   };
   token: string;
 };

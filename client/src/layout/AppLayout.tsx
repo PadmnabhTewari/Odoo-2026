@@ -29,7 +29,7 @@ export function AppLayout() {
           {employee && (
             <div className="mt-4 rounded-2xl border border-white/10 bg-ink-800/80 px-3 py-2 text-sm text-slate-300">
               <div className="font-medium text-white">{employee.name}</div>
-              <div className="text-xs uppercase tracking-[0.2em] text-aurora">{employee.role.replaceAll('_', ' ')}</div>
+              <div className="text-xs uppercase tracking-[0.2em] text-aurora">{employee.role.replace(/_/g, ' ')}</div>
             </div>
           )}
         </div>

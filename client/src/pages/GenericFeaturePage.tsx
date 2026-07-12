@@ -4,6 +4,9 @@ import { InfoCard } from '../components/InfoCard';
 import type { ScreenId } from '../types/assetflow';
 import { screenCards } from '../data/assetflow';
 import { getStoredEmployee } from '../lib/session';
+import { getRolePermissions } from '../lib/roles';
+import { apiRequest } from '../lib/api';
+import { BookingHeatmap, ReportChart } from '../components/ReportChart';
 import { formatDateTime, overlaps } from '../utils/date';
 
 type OrganizationTab = 'departments' | 'categories' | 'employees';
@@ -17,12 +20,19 @@ type Booking = { resource: string; startAt: string; endAt: string; bookedBy: str
 type Maintenance = { asset: string; issue: string; priority: 'Low' | 'Medium' | 'High'; status: 'Pending' | 'Approved' | 'Rejected' | 'In Progress' | 'Resolved'; requestedBy: string };
 type AuditFinding = { asset: string; finding: 'Verified' | 'Missing' | 'Damaged'; note: string };
 type Notification = { title: string; detail: string; channel: string; read: boolean };
+type ReportChartData = {
+  variant: 'bar' | 'donut' | 'heatmap';
+  segments?: { label: string; value: number; color: string }[];
+  cells?: { label: string; intensity: number }[];
+};
+
 type ReportSnapshot = {
   title: string;
   generatedAt: string;
   summary: string;
   metrics: { label: string; value: string }[];
   highlights: string[];
+  chart?: ReportChartData;
 };
 
 const screenMeta: Record<Exclude<ScreenId, 'dashboard'>, { title: string; subtitle: string; badge: string }> = {
@@ -122,16 +132,14 @@ export function GenericFeaturePage({ screen }: { screen: Exclude<ScreenId, 'dash
   const meta = screenMeta[screen];
   const cards = screenCards[screen];
   const employee = getStoredEmployee();
-  const role = employee?.role ?? 'EMPLOYEE';
-  const isAdmin = role === 'ADMIN';
-  const isAssetManager = isAdmin || role === 'ASSET_MANAGER';
-  const isDepartmentLeader = isAdmin || role === 'DEPARTMENT_HEAD';
-  const canManageOrganization = isAdmin;
-  const canManageAssets = isAssetManager;
-  const canManageAllocations = isAssetManager;
-  const canManageAudits = isDepartmentLeader;
-  const canViewReports = isDepartmentLeader;
-  const canGenerateReports = isAssetManager;
+  const {
+    canManageOrganization,
+    canManageAssets,
+    canManageAllocations,
+    canManageAudits,
+    canGenerateReports,
+    canApproveMaintenance
+  } = getRolePermissions(employee?.role);
 
   const [organizationTab, setOrganizationTab] = useState<OrganizationTab>('departments');
   const [departments, setDepartments] = useState(initialDepartments);
@@ -171,10 +179,12 @@ export function GenericFeaturePage({ screen }: { screen: Exclude<ScreenId, 'dash
   const [reportSnapshot, setReportSnapshot] = useState<ReportSnapshot>({
     title: 'Utilization',
     generatedAt: formatDateTime(new Date().toISOString()),
-    summary: 'Utilization report ready for export.',
+    summary: 'Select a report type and range, then click Generate report.',
     metrics: [],
     highlights: []
   });
+  const [reportStatus, setReportStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [reportError, setReportError] = useState('');
 
   const [notificationFilter, setNotificationFilter] = useState<'All' | 'Unread' | 'Read'>('All');
   const [notifications, setNotifications] = useState(initialNotifications);
@@ -294,79 +304,71 @@ export function GenericFeaturePage({ screen }: { screen: Exclude<ScreenId, 'dash
     setAuditMessage(`${auditTitle} closed for ${auditScope}.`);
   };
 
-  const generateReport = () => {
-    if (!canGenerateReports) return;
+  const generateReport = async () => {
+    if (!canGenerateReports) {
+      setReportError('You do not have permission to generate reports.');
+      return;
+    }
 
-    const totalAssets = assets.length;
-    const allocatedAssets = assets.filter((asset) => asset.status === 'Allocated').length;
-    const maintenanceQueue = maintenances.filter((item) => item.status === 'Pending' || item.status === 'Approved' || item.status === 'In Progress').length;
-    const activeBookings = bookings.filter((booking) => booking.status === 'Upcoming' || booking.status === 'Ongoing').length;
-    const openAllocations = allocations.filter((allocation) => allocation.status !== 'Returned').length;
+    setReportStatus('loading');
+    setReportError('');
 
-    const summaryMap: Record<string, ReportSnapshot> = {
-      Utilization: {
-        title: 'Utilization',
-        generatedAt: formatDateTime(new Date().toISOString()),
-        summary: `${allocatedAssets} of ${totalAssets} assets are currently allocated for ${reportRange}.`,
-        metrics: [
-          { label: 'Total assets', value: String(totalAssets) },
-          { label: 'Allocated assets', value: String(allocatedAssets) },
-          { label: 'Open allocations', value: String(openAllocations) }
-        ],
-        highlights: [
+    try {
+      const result = await apiRequest<{
+        title: string;
+        generatedAt: string;
+        reportRange: string;
+        summary: string;
+        metrics: { label: string; value: number }[];
+        chart: ReportChartData;
+        generatedBy?: string;
+      }>('/api/reports/generate', {
+        method: 'POST',
+        body: JSON.stringify({ reportType, reportRange })
+      });
+
+      const totalAssets = assets.length;
+      const allocatedAssets = assets.filter((asset) => asset.status === 'Allocated').length;
+      const maintenanceQueue = maintenances.filter((item) => item.status === 'Pending' || item.status === 'Approved' || item.status === 'In Progress').length;
+      const activeBookings = bookings.filter((booking) => booking.status === 'Upcoming' || booking.status === 'Ongoing').length;
+      const openAllocations = allocations.filter((allocation) => allocation.status !== 'Returned').length;
+
+      const localHighlights: Record<string, string[]> = {
+        Utilization: [
           `${allocatedAssets} assets are in active use.`,
           `${openAllocations} allocations still need follow-up.`,
           `${activeBookings} bookings are upcoming or ongoing.`
-        ]
-      },
-      'Maintenance frequency': {
-        title: 'Maintenance frequency',
-        generatedAt: formatDateTime(new Date().toISOString()),
-        summary: `${maintenanceQueue} maintenance requests are active across the selected range.`,
-        metrics: [
-          { label: 'Open requests', value: String(maintenanceQueue) },
-          { label: 'Resolved items', value: String(maintenances.filter((item) => item.status === 'Resolved').length) },
-          { label: 'High priority', value: String(maintenances.filter((item) => item.priority === 'High').length) }
         ],
-        highlights: [
+        'Maintenance frequency': [
           `${maintenances.filter((item) => item.priority === 'High').length} high-priority requests remain in the queue.`,
           `${maintenances.filter((item) => item.status === 'Resolved').length} issues were resolved.`,
           `${assets.filter((asset) => asset.status === 'Under Maintenance').length} assets are currently offline.`
-        ]
-      },
-      'Allocation summary': {
-        title: 'Allocation summary',
-        generatedAt: formatDateTime(new Date().toISOString()),
-        summary: `${openAllocations} active allocations are tracked for ${reportRange}.`,
-        metrics: [
-          { label: 'Approved', value: String(allocations.filter((allocation) => allocation.status === 'Approved').length) },
-          { label: 'Transferred', value: String(allocations.filter((allocation) => allocation.status === 'Transferred').length) },
-          { label: 'Returned', value: String(allocations.filter((allocation) => allocation.status === 'Returned').length) }
         ],
-        highlights: [
+        'Allocation summary': [
           `${allocations.filter((allocation) => allocation.status === 'Approved').length} allocations are approved.`,
           `${allocations.filter((allocation) => allocation.status === 'Transferred').length} transfers are in motion.`,
           `${assets.filter((asset) => asset.status === 'Allocated').length} assets are physically allocated.`
-        ]
-      },
-      'Booking heatmap': {
-        title: 'Booking heatmap',
-        generatedAt: formatDateTime(new Date().toISOString()),
-        summary: `${activeBookings} active bookings are spread across shared spaces for ${reportRange}.`,
-        metrics: [
-          { label: 'Active bookings', value: String(activeBookings) },
-          { label: 'Cancelled', value: String(bookings.filter((booking) => booking.status === 'Cancelled').length) },
-          { label: 'Completed', value: String(bookings.filter((booking) => booking.status === 'Completed').length) }
         ],
-        highlights: [
+        'Booking heatmap': [
           `${bookings.filter((booking) => booking.resource === 'Room B2').length} entries are tied to Room B2.`,
           `${bookings.filter((booking) => booking.resource !== 'Room B2').length} entries are on other shared resources.`,
           `${activeBookings} slots still need attention.`
         ]
-      }
-    };
+      };
 
-    setReportSnapshot(summaryMap[reportType] ?? summaryMap.Utilization);
+      setReportSnapshot({
+        title: result.title,
+        generatedAt: formatDateTime(result.generatedAt),
+        summary: result.summary,
+        metrics: result.metrics.map((metric) => ({ label: metric.label, value: String(metric.value) })),
+        highlights: localHighlights[reportType] ?? localHighlights.Utilization,
+        chart: result.chart
+      });
+      setReportStatus('ready');
+    } catch (caughtError) {
+      setReportStatus('error');
+      setReportError(caughtError instanceof Error ? caughtError.message : 'Failed to generate report.');
+    }
   };
 
   const visibleNotifications = notifications.filter((notification) => {
@@ -414,7 +416,9 @@ export function GenericFeaturePage({ screen }: { screen: Exclude<ScreenId, 'dash
                       </div>
                     </div>
                   ))}
-                  <button onClick={addDepartment} className="rounded-xl border border-aurora/30 bg-aurora/10 px-4 py-2 text-aurora">{actionLabel}</button>
+                  {canManageOrganization && (
+                    <button onClick={addDepartment} className="rounded-xl border border-aurora/30 bg-aurora/10 px-4 py-2 text-aurora">{actionLabel}</button>
+                  )}
                 </>
               )}
 
@@ -426,7 +430,9 @@ export function GenericFeaturePage({ screen }: { screen: Exclude<ScreenId, 'dash
                       <div className="text-slate-400">{category.field}</div>
                     </div>
                   ))}
-                  <button onClick={addCategory} className="rounded-xl border border-aurora/30 bg-aurora/10 px-4 py-2 text-aurora">Add category</button>
+                  {canManageOrganization && (
+                    <button onClick={addCategory} className="rounded-xl border border-aurora/30 bg-aurora/10 px-4 py-2 text-aurora">Add category</button>
+                  )}
                 </>
               )}
 
@@ -439,10 +445,12 @@ export function GenericFeaturePage({ screen }: { screen: Exclude<ScreenId, 'dash
                           <div className="font-medium text-white">{employee.name}</div>
                           <div className="text-slate-400">{employee.email} • {employee.department}</div>
                         </div>
-                        <div className="flex gap-2">
-                          <button onClick={() => promoteEmployee(employee.email, 'Department Head')} className="rounded-full border border-white/10 px-3 py-1 text-xs">Head</button>
-                          <button onClick={() => promoteEmployee(employee.email, 'Asset Manager')} className="rounded-full border border-white/10 px-3 py-1 text-xs">Manager</button>
-                        </div>
+                        {canManageOrganization && (
+                          <div className="flex gap-2">
+                            <button onClick={() => promoteEmployee(employee.email, 'Department Head')} className="rounded-full border border-white/10 px-3 py-1 text-xs">Head</button>
+                            <button onClick={() => promoteEmployee(employee.email, 'Asset Manager')} className="rounded-full border border-white/10 px-3 py-1 text-xs">Manager</button>
+                          </div>
+                        )}
                       </div>
                       <div className="mt-2 text-xs uppercase tracking-[0.2em] text-aurora">{employee.role}</div>
                     </div>
@@ -488,7 +496,9 @@ export function GenericFeaturePage({ screen }: { screen: Exclude<ScreenId, 'dash
                 <option>Under Maintenance</option>
               </select>
             </div>
-            <button onClick={addAsset} className="mt-4 rounded-xl border border-aurora/30 bg-aurora/10 px-4 py-2 text-aurora">Register asset</button>
+            {canManageAssets && (
+              <button onClick={addAsset} className="mt-4 rounded-xl border border-aurora/30 bg-aurora/10 px-4 py-2 text-aurora">Register asset</button>
+            )}
             <div className="mt-4 space-y-3">
               {filteredAssets.map((asset) => (
                 <div key={asset.tag} className="rounded-2xl border border-white/10 bg-ink-800/80 p-4">
@@ -497,7 +507,9 @@ export function GenericFeaturePage({ screen }: { screen: Exclude<ScreenId, 'dash
                       <div className="font-medium text-white">{asset.tag} • {asset.name}</div>
                       <div className="text-slate-400">{asset.category} • {asset.location} • Holder: {asset.holder}</div>
                     </div>
-                    <button onClick={() => toggleShared(asset.tag)} className="rounded-full border border-white/10 px-3 py-1 text-xs">{asset.shared ? 'Shared' : 'Private'}</button>
+                    {canManageAssets && (
+                      <button onClick={() => toggleShared(asset.tag)} className="rounded-full border border-white/10 px-3 py-1 text-xs">{asset.shared ? 'Shared' : 'Private'}</button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -528,11 +540,13 @@ export function GenericFeaturePage({ screen }: { screen: Exclude<ScreenId, 'dash
               <input value={allocationRecipient} onChange={(event) => setAllocationRecipient(event.target.value)} placeholder="Employee or department" className="rounded-xl border border-white/10 bg-ink-800/80 px-4 py-3" />
               <input value={allocationReturn} onChange={(event) => setAllocationReturn(event.target.value)} type="date" className="rounded-xl border border-white/10 bg-ink-800/80 px-4 py-3" />
             </div>
-            <div className="mt-4 flex gap-3">
-              <button onClick={allocateAsset} className="rounded-xl border border-aurora/30 bg-aurora/10 px-4 py-2 text-aurora">{actionLabel}</button>
-              <button onClick={() => transferAsset(allocationAsset)} className="rounded-xl border border-white/10 px-4 py-2 text-white">Create transfer</button>
-              <button onClick={() => returnAsset(allocationAsset)} className="rounded-xl border border-white/10 px-4 py-2 text-white">Mark returned</button>
-            </div>
+            {canManageAllocations && (
+              <div className="mt-4 flex gap-3">
+                <button onClick={allocateAsset} className="rounded-xl border border-aurora/30 bg-aurora/10 px-4 py-2 text-aurora">{actionLabel}</button>
+                <button onClick={() => transferAsset(allocationAsset)} className="rounded-xl border border-white/10 px-4 py-2 text-white">Create transfer</button>
+                <button onClick={() => returnAsset(allocationAsset)} className="rounded-xl border border-white/10 px-4 py-2 text-white">Mark returned</button>
+              </div>
+            )}
             <p className="mt-4 text-sm text-slate-300">{allocationMessage || 'Double allocation is blocked automatically and transfer requests are routed instead.'}</p>
           </article>
 
@@ -622,11 +636,13 @@ export function GenericFeaturePage({ screen }: { screen: Exclude<ScreenId, 'dash
                     </div>
                     <span className="text-aurora text-xs uppercase tracking-[0.2em]">{maintenance.status}</span>
                   </div>
-                  <div className="mt-3 flex gap-2">
-                    <button onClick={() => updateMaintenance(index, 'Approved')} className="rounded-full border border-white/10 px-3 py-1 text-xs">Approve</button>
-                    <button onClick={() => updateMaintenance(index, 'Rejected')} className="rounded-full border border-white/10 px-3 py-1 text-xs">Reject</button>
-                    <button onClick={() => updateMaintenance(index, 'Resolved')} className="rounded-full border border-white/10 px-3 py-1 text-xs">Resolve</button>
-                  </div>
+                  {canApproveMaintenance && (
+                    <div className="mt-3 flex gap-2">
+                      <button onClick={() => updateMaintenance(index, 'Approved')} className="rounded-full border border-white/10 px-3 py-1 text-xs">Approve</button>
+                      <button onClick={() => updateMaintenance(index, 'Rejected')} className="rounded-full border border-white/10 px-3 py-1 text-xs">Reject</button>
+                      <button onClick={() => updateMaintenance(index, 'Resolved')} className="rounded-full border border-white/10 px-3 py-1 text-xs">Resolve</button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -642,10 +658,14 @@ export function GenericFeaturePage({ screen }: { screen: Exclude<ScreenId, 'dash
               <input value={auditScope} onChange={(event) => setAuditScope(event.target.value)} placeholder="Scope" className="rounded-xl border border-white/10 bg-ink-800/80 px-4 py-3" />
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
-              <button onClick={() => addAuditFinding('Verified')} className="rounded-full border border-white/10 px-3 py-1 text-xs">Verified</button>
-              <button onClick={() => addAuditFinding('Missing')} className="rounded-full border border-white/10 px-3 py-1 text-xs">Missing</button>
-              <button onClick={() => addAuditFinding('Damaged')} className="rounded-full border border-white/10 px-3 py-1 text-xs">Damaged</button>
-              <button onClick={closeAudit} className="rounded-full border border-aurora/30 bg-aurora/10 px-3 py-1 text-xs text-aurora">Close cycle</button>
+              {canManageAudits && (
+                <>
+                  <button onClick={() => addAuditFinding('Verified')} className="rounded-full border border-white/10 px-3 py-1 text-xs">Verified</button>
+                  <button onClick={() => addAuditFinding('Missing')} className="rounded-full border border-white/10 px-3 py-1 text-xs">Missing</button>
+                  <button onClick={() => addAuditFinding('Damaged')} className="rounded-full border border-white/10 px-3 py-1 text-xs">Damaged</button>
+                  <button onClick={closeAudit} className="rounded-full border border-aurora/30 bg-aurora/10 px-3 py-1 text-xs text-aurora">Close cycle</button>
+                </>
+              )}
             </div>
             <p className="mt-4 text-sm text-slate-300">{auditMessage || 'Create a cycle, assign auditors, and record verified, missing, or damaged findings.'}</p>
           </article>
@@ -685,17 +705,68 @@ export function GenericFeaturePage({ screen }: { screen: Exclude<ScreenId, 'dash
                 <option>Quarter to date</option>
               </select>
             </div>
-            <button onClick={generateReport} className="mt-4 rounded-xl border border-aurora/30 bg-aurora/10 px-4 py-2 text-aurora">{actionLabel}</button>
-            <p className="mt-4 text-sm text-slate-300">{reportResult}</p>
+            <button
+              onClick={generateReport}
+              disabled={reportStatus === 'loading' || !canGenerateReports}
+              className="mt-4 rounded-xl border border-aurora/30 bg-aurora/10 px-4 py-2 text-aurora disabled:opacity-60"
+            >
+              {reportStatus === 'loading' ? 'Generating...' : actionLabel}
+            </button>
+            {reportError && <p className="mt-4 text-sm text-ember">{reportError}</p>}
+            <p className="mt-4 text-sm text-slate-300">{reportSnapshot.summary}</p>
+            {reportStatus === 'ready' && reportSnapshot.chart?.variant === 'heatmap' && reportSnapshot.chart.cells && (
+              <div className="mt-4">
+                <BookingHeatmap title={`${reportSnapshot.title} load by day`} cells={reportSnapshot.chart.cells} />
+              </div>
+            )}
+            {reportStatus === 'ready' && reportSnapshot.chart && reportSnapshot.chart.variant !== 'heatmap' && reportSnapshot.chart.segments && (
+              <div className="mt-4">
+                <ReportChart
+                  title={`${reportSnapshot.title} breakdown`}
+                  segments={reportSnapshot.chart.segments}
+                  variant={reportSnapshot.chart.variant}
+                />
+              </div>
+            )}
           </article>
 
           <article className="rounded-[28px] border border-white/10 bg-ink-900/80 p-6 shadow-glow">
-            <h3 className="text-xl font-semibold text-white">Report summary</h3>
-            <div className="mt-4 space-y-3">
-              {cards.map((card) => (
-                <InfoCard key={card.title} {...card} />
-              ))}
+            <div className="flex items-center justify-between gap-4">
+              <h3 className="text-xl font-semibold text-white">Report summary</h3>
+              {reportStatus === 'ready' && (
+                <span className="rounded-full border border-aurora/30 bg-aurora/10 px-3 py-1 text-xs text-aurora">
+                  Generated {reportSnapshot.generatedAt}
+                </span>
+              )}
             </div>
+
+            {reportStatus === 'ready' && reportSnapshot.metrics.length > 0 ? (
+              <div className="mt-4 grid gap-3 md:grid-cols-3">
+                {reportSnapshot.metrics.map((metric) => (
+                  <div key={metric.label} className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div className="text-xs uppercase tracking-[0.2em] text-slate-400">{metric.label}</div>
+                    <div className="mt-2 text-2xl font-semibold text-white">{metric.value}</div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-4 space-y-3">
+                {cards.map((card) => (
+                  <InfoCard key={card.title} {...card} />
+                ))}
+              </div>
+            )}
+
+            {reportStatus === 'ready' && reportSnapshot.highlights.length > 0 && (
+              <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-4">
+                <h4 className="text-sm font-medium text-white">Key highlights</h4>
+                <ul className="mt-3 space-y-2 text-sm text-slate-300">
+                  {reportSnapshot.highlights.map((highlight) => (
+                    <li key={highlight} className="rounded-xl border border-white/8 bg-ink-800/60 px-4 py-3">{highlight}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </article>
         </section>
       )}

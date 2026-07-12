@@ -1,5 +1,6 @@
 import type { Express, Request, Response } from 'express';
-import { getAuthenticatedEmployee } from '../lib/auth.js';
+import { getAccessibleModules } from '../lib/roles.js';
+import { requireAuth } from '../middleware/authorize.js';
 
 const overview = {
   kpis: [
@@ -28,12 +29,8 @@ export function registerOverviewRoutes(app: Express) {
     response.json({ ok: true, service: 'assetflow-server' });
   });
 
-  app.get('/api/overview', async (request: Request, response: Response) => {
-    const employee = await getAuthenticatedEmployee(request);
-    if (!employee) {
-      response.status(401).json({ message: 'Not authenticated.' });
-      return;
-    }
+  app.get('/api/overview', requireAuth, (request: Request, response: Response) => {
+    const employee = request.employee!;
 
     response.json({
       employee: {
@@ -45,22 +42,8 @@ export function registerOverviewRoutes(app: Express) {
     });
   });
 
-  app.get('/api/modules', async (request: Request, response: Response) => {
-    const employee = await getAuthenticatedEmployee(request);
-    if (!employee) {
-      response.status(401).json({ message: 'Not authenticated.' });
-      return;
-    }
-
-    response.json([
-      'Organization Setup',
-      'Asset Registry',
-      'Allocation & Transfers',
-      'Resource Booking',
-      'Maintenance Workflow',
-      'Audit Cycles',
-      'Reports & Analytics',
-      'Activity Logs & Notifications'
-    ]);
+  app.get('/api/modules', requireAuth, (request: Request, response: Response) => {
+    const employee = request.employee!;
+    response.json(getAccessibleModules(employee.role));
   });
 }
