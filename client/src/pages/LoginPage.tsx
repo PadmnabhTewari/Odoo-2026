@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiRequest } from '../lib/api';
+import { getStoredToken, storeSession } from '../lib/session';
 
 type AuthResponse = {
   employee: {
@@ -24,7 +25,7 @@ export function LoginPage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (localStorage.getItem('assetflow_token')) {
+    if (getStoredToken()) {
       navigate('/dashboard', { replace: true });
     }
   }, [navigate]);
@@ -44,8 +45,7 @@ export function LoginPage() {
         body: JSON.stringify(payload)
       });
 
-      localStorage.setItem('assetflow_token', result.token);
-      localStorage.setItem('assetflow_employee', JSON.stringify(result.employee));
+      storeSession(result.token, result.employee);
       navigate('/dashboard', { replace: true });
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : 'Authentication failed.');
@@ -110,7 +110,7 @@ export function LoginPage() {
               <div className="rounded-3xl border border-white/10 bg-ink-800/80 p-6">
                 <h2 className="text-xl font-semibold text-white">Default admin</h2>
                 <p className="mt-2 text-sm leading-6 text-slate-300">
-                  Use admin@assetflow.local with password Admin@12345 after the database is seeded for the first time.
+                  Use admin@gmail.com with password Admin@12345 after the database is seeded for the first time.
                 </p>
               </div>
             </div>

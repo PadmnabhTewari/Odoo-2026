@@ -1,15 +1,15 @@
-import type { ActivityItem, KpiCard, ScreenCard, ScreenId } from '../types/assetflow';
+import type { ActivityItem, EmployeeRole, KpiCard, ScreenCard, ScreenId } from '../types/assetflow';
 
-export const sidebarItems: { id: ScreenId; path: string; label: string; caption: string }[] = [
-  { id: 'dashboard', path: '/dashboard', label: 'Dashboard', caption: 'Operational snapshot' },
-  { id: 'organization', path: '/organization', label: 'Organization Setup', caption: 'Departments and roles' },
-  { id: 'assets', path: '/assets', label: 'Asset Directory', caption: 'Register and track assets' },
-  { id: 'allocations', path: '/allocations', label: 'Allocation & Transfer', caption: 'Conflict-safe handoffs' },
-  { id: 'bookings', path: '/bookings', label: 'Resource Booking', caption: 'Calendar and overlap checks' },
-  { id: 'maintenance', path: '/maintenance', label: 'Maintenance', caption: 'Approval workflow' },
-  { id: 'audits', path: '/audits', label: 'Audits', caption: 'Cycle verification' },
-  { id: 'reports', path: '/reports', label: 'Reports', caption: 'Analytics and exports' },
-  { id: 'activity', path: '/activity', label: 'Activity Logs', caption: 'Notifications and traceability' }
+export const sidebarItems: { id: ScreenId; path: string; label: string; caption: string; allowedRoles: EmployeeRole[] }[] = [
+  { id: 'dashboard', path: '/dashboard', label: 'Dashboard', caption: 'Operational snapshot', allowedRoles: ['ADMIN', 'ASSET_MANAGER', 'DEPARTMENT_HEAD', 'EMPLOYEE'] },
+  { id: 'organization', path: '/organization', label: 'Organization Setup', caption: 'Departments and roles', allowedRoles: ['ADMIN'] },
+  { id: 'assets', path: '/assets', label: 'Asset Directory', caption: 'Register and track assets', allowedRoles: ['ADMIN', 'ASSET_MANAGER'] },
+  { id: 'allocations', path: '/allocations', label: 'Allocation & Transfer', caption: 'Conflict-safe handoffs', allowedRoles: ['ADMIN', 'ASSET_MANAGER'] },
+  { id: 'bookings', path: '/bookings', label: 'Resource Booking', caption: 'Calendar and overlap checks', allowedRoles: ['ADMIN', 'ASSET_MANAGER', 'DEPARTMENT_HEAD', 'EMPLOYEE'] },
+  { id: 'maintenance', path: '/maintenance', label: 'Maintenance', caption: 'Approval workflow', allowedRoles: ['ADMIN', 'ASSET_MANAGER', 'DEPARTMENT_HEAD', 'EMPLOYEE'] },
+  { id: 'audits', path: '/audits', label: 'Audits', caption: 'Cycle verification', allowedRoles: ['ADMIN', 'ASSET_MANAGER', 'DEPARTMENT_HEAD'] },
+  { id: 'reports', path: '/reports', label: 'Reports', caption: 'Analytics and exports', allowedRoles: ['ADMIN', 'ASSET_MANAGER', 'DEPARTMENT_HEAD'] },
+  { id: 'activity', path: '/activity', label: 'Activity Logs', caption: 'Notifications and traceability', allowedRoles: ['ADMIN', 'ASSET_MANAGER', 'DEPARTMENT_HEAD', 'EMPLOYEE'] }
 ];
 
 export const kpis: KpiCard[] = [

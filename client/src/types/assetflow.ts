@@ -1,3 +1,5 @@
+export type EmployeeRole = 'ADMIN' | 'ASSET_MANAGER' | 'DEPARTMENT_HEAD' | 'EMPLOYEE';
+
 export type ScreenId =
   | 'dashboard'
   | 'organization'

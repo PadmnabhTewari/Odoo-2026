@@ -3,6 +3,7 @@ import { PageHero } from '../components/PageHero';
 import { InfoCard } from '../components/InfoCard';
 import { KpiCard } from '../components/KpiCard';
 import { apiRequest } from '../lib/api';
+import { getStoredEmployee } from '../lib/session';
 import { alerts as fallbackAlerts, activity as fallbackActivity, workflow } from '../data/assetflow';
 
 type OverviewResponse = {
@@ -15,6 +16,7 @@ type OverviewResponse = {
 export function DashboardPage() {
   const [overview, setOverview] = useState<OverviewResponse | null>(null);
   const [error, setError] = useState('');
+  const currentEmployee = getStoredEmployee();
 
   useEffect(() => {
     apiRequest<OverviewResponse>('/api/overview')
@@ -37,7 +39,7 @@ export function DashboardPage() {
       <PageHero
         title="Enterprise Asset & Resource Management"
         subtitle="Centralized ERP-style workflows for departments, assets, bookings, maintenance, audits, notifications, and accountability."
-        badge={overview ? `${overview.employee.name} • ${overview.employee.role}` : 'Dashboard'}
+        badge={overview ? `${overview.employee.name} • ${overview.employee.role}` : currentEmployee ? `${currentEmployee.name} • ${currentEmployee.role}` : 'Dashboard'}
       />
 
       {error && <div className="rounded-2xl border border-ember/30 bg-ember/10 px-4 py-3 text-sm text-ember">{error}</div>}

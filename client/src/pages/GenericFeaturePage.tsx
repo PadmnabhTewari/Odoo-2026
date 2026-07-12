@@ -3,6 +3,7 @@ import { PageHero } from '../components/PageHero';
 import { InfoCard } from '../components/InfoCard';
 import type { ScreenId } from '../types/assetflow';
 import { screenCards } from '../data/assetflow';
+import { getStoredEmployee } from '../lib/session';
 import { formatDateTime, overlaps } from '../utils/date';
 
 type OrganizationTab = 'departments' | 'categories' | 'employees';
@@ -16,6 +17,13 @@ type Booking = { resource: string; startAt: string; endAt: string; bookedBy: str
 type Maintenance = { asset: string; issue: string; priority: 'Low' | 'Medium' | 'High'; status: 'Pending' | 'Approved' | 'Rejected' | 'In Progress' | 'Resolved'; requestedBy: string };
 type AuditFinding = { asset: string; finding: 'Verified' | 'Missing' | 'Damaged'; note: string };
 type Notification = { title: string; detail: string; channel: string; read: boolean };
+type ReportSnapshot = {
+  title: string;
+  generatedAt: string;
+  summary: string;
+  metrics: { label: string; value: string }[];
+  highlights: string[];
+};
 
 const screenMeta: Record<Exclude<ScreenId, 'dashboard'>, { title: string; subtitle: string; badge: string }> = {
   organization: {
@@ -113,6 +121,17 @@ const initialNotifications: Notification[] = [
 export function GenericFeaturePage({ screen }: { screen: Exclude<ScreenId, 'dashboard'> }) {
   const meta = screenMeta[screen];
   const cards = screenCards[screen];
+  const employee = getStoredEmployee();
+  const role = employee?.role ?? 'EMPLOYEE';
+  const isAdmin = role === 'ADMIN';
+  const isAssetManager = isAdmin || role === 'ASSET_MANAGER';
+  const isDepartmentLeader = isAdmin || role === 'DEPARTMENT_HEAD';
+  const canManageOrganization = isAdmin;
+  const canManageAssets = isAssetManager;
+  const canManageAllocations = isAssetManager;
+  const canManageAudits = isDepartmentLeader;
+  const canViewReports = isDepartmentLeader;
+  const canGenerateReports = isAssetManager;
 
   const [organizationTab, setOrganizationTab] = useState<OrganizationTab>('departments');
   const [departments, setDepartments] = useState(initialDepartments);
@@ -149,7 +168,13 @@ export function GenericFeaturePage({ screen }: { screen: Exclude<ScreenId, 'dash
 
   const [reportType, setReportType] = useState('Utilization');
   const [reportRange, setReportRange] = useState('Last 30 days');
-  const [reportResult, setReportResult] = useState('Utilization report ready for export.');
+  const [reportSnapshot, setReportSnapshot] = useState<ReportSnapshot>({
+    title: 'Utilization',
+    generatedAt: formatDateTime(new Date().toISOString()),
+    summary: 'Utilization report ready for export.',
+    metrics: [],
+    highlights: []
+  });
 
   const [notificationFilter, setNotificationFilter] = useState<'All' | 'Unread' | 'Read'>('All');
   const [notifications, setNotifications] = useState(initialNotifications);
@@ -264,9 +289,85 @@ export function GenericFeaturePage({ screen }: { screen: Exclude<ScreenId, 'dash
     setAuditMessage(`${finding} recorded and discrepancy list updated.`);
   };
 
-  const closeAudit = () => setAuditMessage(`${auditTitle} closed for ${auditScope}.`);
+  const closeAudit = () => {
+    if (!canManageAudits) return;
+    setAuditMessage(`${auditTitle} closed for ${auditScope}.`);
+  };
 
-  const generateReport = () => setReportResult(`${reportType} report generated for ${reportRange}.`);
+  const generateReport = () => {
+    if (!canGenerateReports) return;
+
+    const totalAssets = assets.length;
+    const allocatedAssets = assets.filter((asset) => asset.status === 'Allocated').length;
+    const maintenanceQueue = maintenances.filter((item) => item.status === 'Pending' || item.status === 'Approved' || item.status === 'In Progress').length;
+    const activeBookings = bookings.filter((booking) => booking.status === 'Upcoming' || booking.status === 'Ongoing').length;
+    const openAllocations = allocations.filter((allocation) => allocation.status !== 'Returned').length;
+
+    const summaryMap: Record<string, ReportSnapshot> = {
+      Utilization: {
+        title: 'Utilization',
+        generatedAt: formatDateTime(new Date().toISOString()),
+        summary: `${allocatedAssets} of ${totalAssets} assets are currently allocated for ${reportRange}.`,
+        metrics: [
+          { label: 'Total assets', value: String(totalAssets) },
+          { label: 'Allocated assets', value: String(allocatedAssets) },
+          { label: 'Open allocations', value: String(openAllocations) }
+        ],
+        highlights: [
+          `${allocatedAssets} assets are in active use.`,
+          `${openAllocations} allocations still need follow-up.`,
+          `${activeBookings} bookings are upcoming or ongoing.`
+        ]
+      },
+      'Maintenance frequency': {
+        title: 'Maintenance frequency',
+        generatedAt: formatDateTime(new Date().toISOString()),
+        summary: `${maintenanceQueue} maintenance requests are active across the selected range.`,
+        metrics: [
+          { label: 'Open requests', value: String(maintenanceQueue) },
+          { label: 'Resolved items', value: String(maintenances.filter((item) => item.status === 'Resolved').length) },
+          { label: 'High priority', value: String(maintenances.filter((item) => item.priority === 'High').length) }
+        ],
+        highlights: [
+          `${maintenances.filter((item) => item.priority === 'High').length} high-priority requests remain in the queue.`,
+          `${maintenances.filter((item) => item.status === 'Resolved').length} issues were resolved.`,
+          `${assets.filter((asset) => asset.status === 'Under Maintenance').length} assets are currently offline.`
+        ]
+      },
+      'Allocation summary': {
+        title: 'Allocation summary',
+        generatedAt: formatDateTime(new Date().toISOString()),
+        summary: `${openAllocations} active allocations are tracked for ${reportRange}.`,
+        metrics: [
+          { label: 'Approved', value: String(allocations.filter((allocation) => allocation.status === 'Approved').length) },
+          { label: 'Transferred', value: String(allocations.filter((allocation) => allocation.status === 'Transferred').length) },
+          { label: 'Returned', value: String(allocations.filter((allocation) => allocation.status === 'Returned').length) }
+        ],
+        highlights: [
+          `${allocations.filter((allocation) => allocation.status === 'Approved').length} allocations are approved.`,
+          `${allocations.filter((allocation) => allocation.status === 'Transferred').length} transfers are in motion.`,
+          `${assets.filter((asset) => asset.status === 'Allocated').length} assets are physically allocated.`
+        ]
+      },
+      'Booking heatmap': {
+        title: 'Booking heatmap',
+        generatedAt: formatDateTime(new Date().toISOString()),
+        summary: `${activeBookings} active bookings are spread across shared spaces for ${reportRange}.`,
+        metrics: [
+          { label: 'Active bookings', value: String(activeBookings) },
+          { label: 'Cancelled', value: String(bookings.filter((booking) => booking.status === 'Cancelled').length) },
+          { label: 'Completed', value: String(bookings.filter((booking) => booking.status === 'Completed').length) }
+        ],
+        highlights: [
+          `${bookings.filter((booking) => booking.resource === 'Room B2').length} entries are tied to Room B2.`,
+          `${bookings.filter((booking) => booking.resource !== 'Room B2').length} entries are on other shared resources.`,
+          `${activeBookings} slots still need attention.`
+        ]
+      }
+    };
+
+    setReportSnapshot(summaryMap[reportType] ?? summaryMap.Utilization);
+  };
 
   const visibleNotifications = notifications.filter((notification) => {
     if (notificationFilter === 'All') return true;
