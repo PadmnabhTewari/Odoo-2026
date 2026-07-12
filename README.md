@@ -59,7 +59,7 @@ This repository is structured for one Render web service plus one Neon PostgreSQ
 
 1. Create a free Neon project and copy the PostgreSQL connection string.
 2. Create a new Render web service from this repo.
-3. Set the Render build command to `npm install && npm run build`.
+3. Set the Render build command to `npm install && npm run build && npx prisma db push --schema server/prisma/schema.prisma`.
 4. Set the Render start command to `npm start`.
 5. Add environment variables in Render:
 	- `DATABASE_URL` = Neon connection string
@@ -68,7 +68,7 @@ This repository is structured for one Render web service plus one Neon PostgreSQ
 	- `AUTH_SECRET` = a long random secret
 	- `NODE_ENV` = `production`
 6. Keep the free plan database on Neon, not inside Render.
-7. After the first deploy, seed or push the Prisma schema to Neon.
+7. The build now pushes the Prisma schema to Neon before the server starts.
 
 ### Prisma Setup
 
