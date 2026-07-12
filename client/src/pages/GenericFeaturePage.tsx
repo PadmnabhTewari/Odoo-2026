@@ -145,10 +145,24 @@ export function GenericFeaturePage({ screen }: { screen: Exclude<ScreenId, 'dash
   const [departments, setDepartments] = useState(initialDepartments);
   const [categories, setCategories] = useState(initialCategories);
   const [employees, setEmployees] = useState(initialEmployees);
+  const [departmentName, setDepartmentName] = useState('');
+  const [departmentCode, setDepartmentCode] = useState('');
+  const [departmentHead, setDepartmentHead] = useState('');
+  const [departmentParent, setDepartmentParent] = useState('');
+  const [categoryName, setCategoryName] = useState('');
+  const [categoryField, setCategoryField] = useState('');
+  const [organizationMessage, setOrganizationMessage] = useState('');
 
   const [assetSearch, setAssetSearch] = useState('');
   const [assetStatusFilter, setAssetStatusFilter] = useState('All');
   const [assets, setAssets] = useState(initialAssets);
+  const [assetTag, setAssetTag] = useState('');
+  const [assetName, setAssetName] = useState('');
+  const [assetCategory, setAssetCategory] = useState('');
+  const [assetLocation, setAssetLocation] = useState('');
+  const [assetHolder, setAssetHolder] = useState('');
+  const [assetShared, setAssetShared] = useState(false);
+  const [assetMessage, setAssetMessage] = useState('');
 
   const [allocationAsset, setAllocationAsset] = useState('AF-0114');
   const [allocationRecipient, setAllocationRecipient] = useState('');
@@ -156,21 +170,23 @@ export function GenericFeaturePage({ screen }: { screen: Exclude<ScreenId, 'dash
   const [allocationMessage, setAllocationMessage] = useState('');
   const [allocations, setAllocations] = useState(initialAllocations);
 
-  const [bookingResource, setBookingResource] = useState('Room B2');
-  const [bookingStart, setBookingStart] = useState('2026-07-12T10:00');
-  const [bookingEnd, setBookingEnd] = useState('2026-07-12T11:00');
-  const [bookingOwner, setBookingOwner] = useState('Facilities');
-  const [bookingPurpose, setBookingPurpose] = useState('Team sync');
+  const [bookingResource, setBookingResource] = useState('');
+  const [bookingStart, setBookingStart] = useState('');
+  const [bookingEnd, setBookingEnd] = useState('');
+  const [bookingOwner, setBookingOwner] = useState('');
+  const [bookingPurpose, setBookingPurpose] = useState('');
   const [bookingMessage, setBookingMessage] = useState('');
   const [bookings, setBookings] = useState(initialBookings);
 
-  const [maintenanceAsset, setMaintenanceAsset] = useState('AF-0041');
+  const [maintenanceAsset, setMaintenanceAsset] = useState('');
   const [maintenanceIssue, setMaintenanceIssue] = useState('');
   const [maintenancePriority, setMaintenancePriority] = useState<Maintenance['priority']>('High');
   const [maintenances, setMaintenances] = useState(initialMaintenance);
 
-  const [auditTitle, setAuditTitle] = useState('Q3 Warehouse Audit');
-  const [auditScope, setAuditScope] = useState('Warehouse / North Depot');
+  const [auditTitle, setAuditTitle] = useState('');
+  const [auditScope, setAuditScope] = useState('');
+  const [auditAsset, setAuditAsset] = useState('');
+  const [auditNote, setAuditNote] = useState('');
   const [auditFindings, setAuditFindings] = useState(initialAuditFindings);
   const [auditMessage, setAuditMessage] = useState('');
 
@@ -218,12 +234,35 @@ export function GenericFeaturePage({ screen }: { screen: Exclude<ScreenId, 'dash
   });
 
   const addDepartment = () => {
-    const code = `D${String(departments.length + 1).padStart(2, '0')}`;
-    setDepartments((current) => [...current, { name: `New Department ${current.length + 1}`, code, head: 'Unassigned', status: 'Active', parent: 'Corporate' }]);
+    const name = departmentName.trim();
+    const code = departmentCode.trim().toUpperCase();
+    if (!name || !code) {
+      setOrganizationMessage('Enter a department name and a unique code.');
+      return;
+    }
+    if (departments.some((department) => department.code.toLowerCase() === code.toLowerCase() || department.name.toLowerCase() === name.toLowerCase())) {
+      setOrganizationMessage('That department name or code already exists.');
+      return;
+    }
+    setDepartments((current) => [...current, { name, code, head: departmentHead.trim(), status: 'Active', parent: departmentParent.trim() }]);
+    setDepartmentName(''); setDepartmentCode(''); setDepartmentHead(''); setDepartmentParent('');
+    setOrganizationMessage(`${name} was added to the organization.`);
   };
 
   const addCategory = () => {
-    setCategories((current) => [...current, { name: `Category ${current.length + 1}`, field: 'Custom field', status: 'Active' }]);
+    const name = categoryName.trim();
+    const field = categoryField.trim();
+    if (!name || !field) {
+      setOrganizationMessage('Enter a category name and the field it should track.');
+      return;
+    }
+    if (categories.some((category) => category.name.toLowerCase() === name.toLowerCase())) {
+      setOrganizationMessage('That category already exists.');
+      return;
+    }
+    setCategories((current) => [...current, { name, field, status: 'Active' }]);
+    setCategoryName(''); setCategoryField('');
+    setOrganizationMessage(`${name} was added to the asset catalog.`);
   };
 
   const promoteEmployee = (email: string, role: string) => {
@@ -231,11 +270,25 @@ export function GenericFeaturePage({ screen }: { screen: Exclude<ScreenId, 'dash
   };
 
   const addAsset = () => {
-    const tag = `AF-${String(1000 + assets.length + 1)}`;
+    const tag = assetTag.trim().toUpperCase();
+    const name = assetName.trim();
+    const category = assetCategory.trim();
+    const location = assetLocation.trim();
+    const holder = assetHolder.trim();
+    if (!tag || !name || !category || !location || !holder) {
+      setAssetMessage('Enter a tag, name, category, location, and current holder before registering an asset.');
+      return;
+    }
+    if (assets.some((asset) => asset.tag.toLowerCase() === tag.toLowerCase())) {
+      setAssetMessage(`Asset tag ${tag} is already in use.`);
+      return;
+    }
     setAssets((current) => [
-      { tag, name: `Asset ${current.length + 1}`, category: 'Electronics', holder: 'Pool', status: 'Available', location: 'HQ', shared: true },
+      { tag, name, category, holder, status: 'Available', location, shared: assetShared },
       ...current
     ]);
+    setAssetTag(''); setAssetName(''); setAssetCategory(''); setAssetLocation(''); setAssetHolder(''); setAssetShared(false);
+    setAssetMessage(`${tag} was registered and is now available.`);
   };
 
   const toggleShared = (tag: string) => {
@@ -248,13 +301,17 @@ export function GenericFeaturePage({ screen }: { screen: Exclude<ScreenId, 'dash
       setAllocationMessage('Select a valid asset.');
       return;
     }
+    if (!allocationRecipient.trim() || !allocationReturn) {
+      setAllocationMessage('Enter a recipient and expected return date.');
+      return;
+    }
     if (target.status === 'Allocated') {
       setAllocationMessage(`${target.tag} is currently held by ${target.holder}. Create a transfer request instead.`);
       return;
     }
-    setAllocationMessage(`${target.tag} allocated to ${allocationRecipient || 'selected recipient'}.`);
-    setAssets((current) => current.map((asset) => (asset.tag === allocationAsset ? { ...asset, status: 'Allocated', holder: allocationRecipient || 'Allocated holder' } : asset)));
-    setAllocations((current) => [...current, { asset: allocationAsset, recipient: allocationRecipient || 'Employee', expectedReturn: allocationReturn || 'No date', status: 'Approved' }]);
+    setAllocationMessage(`${target.tag} allocated to ${allocationRecipient}.`);
+    setAssets((current) => current.map((asset) => (asset.tag === allocationAsset ? { ...asset, status: 'Allocated', holder: allocationRecipient } : asset)));
+    setAllocations((current) => [...current, { asset: allocationAsset, recipient: allocationRecipient, expectedReturn: allocationReturn, status: 'Approved' }]);
   };
 
   const transferAsset = (tag: string) => {
@@ -269,6 +326,14 @@ export function GenericFeaturePage({ screen }: { screen: Exclude<ScreenId, 'dash
   };
 
   const createBooking = () => {
+    if (!bookingResource.trim() || !bookingOwner.trim() || !bookingStart || !bookingEnd || !bookingPurpose.trim()) {
+      setBookingMessage('Complete the resource, owner, time range, and purpose before booking.');
+      return;
+    }
+    if (new Date(bookingEnd).getTime() <= new Date(bookingStart).getTime()) {
+      setBookingMessage('The end time must be after the start time.');
+      return;
+    }
     const conflict = bookings.find((booking) => booking.resource === bookingResource && overlaps(booking.startAt, booking.endAt, bookingStart, bookingEnd));
     if (conflict) {
       setBookingMessage(`Overlap blocked with ${conflict.resource} from ${formatDateTime(conflict.startAt)} to ${formatDateTime(conflict.endAt)}.`);
@@ -279,6 +344,7 @@ export function GenericFeaturePage({ screen }: { screen: Exclude<ScreenId, 'dash
       ...current
     ]);
     setBookingMessage(`Booking created for ${bookingResource}.`);
+    setBookingResource(''); setBookingOwner(''); setBookingStart(''); setBookingEnd(''); setBookingPurpose('');
   };
 
   const updateBookingStatus = (index: number, status: Booking['status']) => {
@@ -286,7 +352,9 @@ export function GenericFeaturePage({ screen }: { screen: Exclude<ScreenId, 'dash
   };
 
   const submitMaintenance = () => {
-    setMaintenances((current) => [{ asset: maintenanceAsset, issue: maintenanceIssue || 'No description', priority: maintenancePriority, status: 'Pending', requestedBy: 'Employee' }, ...current]);
+    if (!maintenanceAsset || !maintenanceIssue.trim()) return;
+    setMaintenances((current) => [{ asset: maintenanceAsset, issue: maintenanceIssue.trim(), priority: maintenancePriority, status: 'Pending', requestedBy: employee?.name || 'Employee' }, ...current]);
+    setMaintenanceAsset('');
     setMaintenanceIssue('');
   };
 
@@ -295,8 +363,13 @@ export function GenericFeaturePage({ screen }: { screen: Exclude<ScreenId, 'dash
   };
 
   const addAuditFinding = (finding: AuditFinding['finding']) => {
-    setAuditFindings((current) => [{ asset: `Audit ${current.length + 1}`, finding, note: `Recorded during ${auditTitle}` }, ...current]);
-    setAuditMessage(`${finding} recorded and discrepancy list updated.`);
+    if (!auditTitle.trim() || !auditScope.trim() || !auditAsset.trim() || !auditNote.trim()) {
+      setAuditMessage('Enter the audit, scope, asset tag, and observation before recording a finding.');
+      return;
+    }
+    setAuditFindings((current) => [{ asset: auditAsset.trim(), finding, note: auditNote.trim() }, ...current]);
+    setAuditAsset(''); setAuditNote('');
+    setAuditMessage(`${finding} recorded for ${auditTitle}.`);
   };
 
   const closeAudit = () => {
@@ -405,6 +478,18 @@ export function GenericFeaturePage({ screen }: { screen: Exclude<ScreenId, 'dash
             <div className="mt-4 space-y-3 text-sm text-slate-300">
               {organizationTab === 'departments' && (
                 <>
+                  {canManageOrganization && (
+                    <div className="rounded-2xl border border-aurora/20 bg-aurora/[0.06] p-3">
+                      <p className="mb-3 text-xs font-medium uppercase tracking-[0.18em] text-aurora">New department</p>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <input value={departmentName} onChange={(event) => setDepartmentName(event.target.value)} placeholder="Department name" className="rounded-xl border border-white/10 bg-ink-800/80 px-3 py-2" />
+                        <input value={departmentCode} onChange={(event) => setDepartmentCode(event.target.value)} placeholder="Unique code (e.g. OPS)" className="rounded-xl border border-white/10 bg-ink-800/80 px-3 py-2" />
+                        <input value={departmentHead} onChange={(event) => setDepartmentHead(event.target.value)} placeholder="Department head (optional)" className="rounded-xl border border-white/10 bg-ink-800/80 px-3 py-2" />
+                        <input value={departmentParent} onChange={(event) => setDepartmentParent(event.target.value)} placeholder="Parent department (optional)" className="rounded-xl border border-white/10 bg-ink-800/80 px-3 py-2" />
+                      </div>
+                      <button onClick={addDepartment} className="mt-3 rounded-xl border border-aurora/30 bg-aurora/10 px-4 py-2 text-aurora">Create department</button>
+                    </div>
+                  )}
                   {departments.map((department) => (
                     <div key={department.code} className="rounded-2xl border border-white/10 bg-ink-800/80 p-4">
                       <div className="flex items-center justify-between">
@@ -416,23 +501,24 @@ export function GenericFeaturePage({ screen }: { screen: Exclude<ScreenId, 'dash
                       </div>
                     </div>
                   ))}
-                  {canManageOrganization && (
-                    <button onClick={addDepartment} className="rounded-xl border border-aurora/30 bg-aurora/10 px-4 py-2 text-aurora">{actionLabel}</button>
-                  )}
                 </>
               )}
 
               {organizationTab === 'categories' && (
                 <>
+                  {canManageOrganization && (
+                    <div className="rounded-2xl border border-aurora/20 bg-aurora/[0.06] p-3">
+                      <p className="mb-3 text-xs font-medium uppercase tracking-[0.18em] text-aurora">New category</p>
+                      <div className="grid gap-2 sm:grid-cols-2"><input value={categoryName} onChange={(event) => setCategoryName(event.target.value)} placeholder="Category name" className="rounded-xl border border-white/10 bg-ink-800/80 px-3 py-2" /><input value={categoryField} onChange={(event) => setCategoryField(event.target.value)} placeholder="Field to track (e.g. Warranty)" className="rounded-xl border border-white/10 bg-ink-800/80 px-3 py-2" /></div>
+                      <button onClick={addCategory} className="mt-3 rounded-xl border border-aurora/30 bg-aurora/10 px-4 py-2 text-aurora">Add category</button>
+                    </div>
+                  )}
                   {categories.map((category) => (
                     <div key={category.name} className="rounded-2xl border border-white/10 bg-ink-800/80 p-4">
                       <div className="font-medium text-white">{category.name}</div>
                       <div className="text-slate-400">{category.field}</div>
                     </div>
                   ))}
-                  {canManageOrganization && (
-                    <button onClick={addCategory} className="rounded-xl border border-aurora/30 bg-aurora/10 px-4 py-2 text-aurora">Add category</button>
-                  )}
                 </>
               )}
 
@@ -458,6 +544,7 @@ export function GenericFeaturePage({ screen }: { screen: Exclude<ScreenId, 'dash
                 </>
               )}
             </div>
+            {organizationMessage && <p className="mt-4 rounded-xl border border-aurora/20 bg-aurora/[0.06] px-3 py-2 text-sm text-aurora">{organizationMessage}</p>}
           </article>
 
           <article className="rounded-[28px] border border-white/10 bg-ink-900/80 p-6 shadow-glow">
@@ -497,8 +584,20 @@ export function GenericFeaturePage({ screen }: { screen: Exclude<ScreenId, 'dash
               </select>
             </div>
             {canManageAssets && (
-              <button onClick={addAsset} className="mt-4 rounded-xl border border-aurora/30 bg-aurora/10 px-4 py-2 text-aurora">Register asset</button>
+              <div className="mt-4 rounded-2xl border border-aurora/20 bg-aurora/[0.06] p-3">
+                <p className="mb-3 text-xs font-medium uppercase tracking-[0.18em] text-aurora">Register a new asset</p>
+                <div className="grid gap-2 md:grid-cols-2">
+                  <input value={assetTag} onChange={(event) => setAssetTag(event.target.value)} placeholder="Unique asset tag" className="rounded-xl border border-white/10 bg-ink-800/80 px-3 py-2" />
+                  <input value={assetName} onChange={(event) => setAssetName(event.target.value)} placeholder="Asset name" className="rounded-xl border border-white/10 bg-ink-800/80 px-3 py-2" />
+                  <input value={assetCategory} onChange={(event) => setAssetCategory(event.target.value)} placeholder="Category" className="rounded-xl border border-white/10 bg-ink-800/80 px-3 py-2" />
+                  <input value={assetLocation} onChange={(event) => setAssetLocation(event.target.value)} placeholder="Location" className="rounded-xl border border-white/10 bg-ink-800/80 px-3 py-2" />
+                  <input value={assetHolder} onChange={(event) => setAssetHolder(event.target.value)} placeholder="Current holder or pool" className="rounded-xl border border-white/10 bg-ink-800/80 px-3 py-2 md:col-span-2" />
+                </div>
+                <label className="mt-3 flex items-center gap-2 text-sm text-slate-300"><input checked={assetShared} onChange={(event) => setAssetShared(event.target.checked)} type="checkbox" className="h-4 w-4 accent-[#47d7ac]" /> Available for shared bookings</label>
+                <button onClick={addAsset} className="mt-3 rounded-xl border border-aurora/30 bg-aurora/10 px-4 py-2 text-aurora">Register asset</button>
+              </div>
             )}
+            {assetMessage && <p className="mt-3 text-sm text-aurora">{assetMessage}</p>}
             <div className="mt-4 space-y-3">
               {filteredAssets.map((asset) => (
                 <div key={asset.tag} className="rounded-2xl border border-white/10 bg-ink-800/80 p-4">
@@ -611,6 +710,7 @@ export function GenericFeaturePage({ screen }: { screen: Exclude<ScreenId, 'dash
           <article className="rounded-[28px] border border-white/10 bg-white/5 p-6 shadow-glow backdrop-blur">
             <div className="grid gap-3 md:grid-cols-2">
               <select value={maintenanceAsset} onChange={(event) => setMaintenanceAsset(event.target.value)} className="rounded-xl border border-white/10 bg-ink-800/80 px-4 py-3">
+                <option value="">Select an asset</option>
                 {assets.map((asset) => <option key={asset.tag}>{asset.tag}</option>)}
               </select>
               <select value={maintenancePriority} onChange={(event) => setMaintenancePriority(event.target.value as Maintenance['priority'])} className="rounded-xl border border-white/10 bg-ink-800/80 px-4 py-3">
@@ -656,6 +756,8 @@ export function GenericFeaturePage({ screen }: { screen: Exclude<ScreenId, 'dash
             <div className="grid gap-3 md:grid-cols-2">
               <input value={auditTitle} onChange={(event) => setAuditTitle(event.target.value)} placeholder="Audit title" className="rounded-xl border border-white/10 bg-ink-800/80 px-4 py-3" />
               <input value={auditScope} onChange={(event) => setAuditScope(event.target.value)} placeholder="Scope" className="rounded-xl border border-white/10 bg-ink-800/80 px-4 py-3" />
+              <input value={auditAsset} onChange={(event) => setAuditAsset(event.target.value)} placeholder="Asset tag" className="rounded-xl border border-white/10 bg-ink-800/80 px-4 py-3" />
+              <input value={auditNote} onChange={(event) => setAuditNote(event.target.value)} placeholder="Observation / note" className="rounded-xl border border-white/10 bg-ink-800/80 px-4 py-3" />
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
               {canManageAudits && (

@@ -4,8 +4,10 @@
 
 :root {
   color-scheme: dark;
-  font-family: "Aptos", "Segoe UI", sans-serif;
+  font-family: Inter, "Aptos", "Segoe UI", sans-serif;
   background: #07111f;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
 }
 
 html,
@@ -16,6 +18,77 @@ body,
 }
 
 body {
+  min-width: 320px;
   background: #07111f;
-  background-image: radial-gradient(circle at top left, rgba(71, 215, 172, 0.12), transparent 28%), radial-gradient(circle at top right, rgba(255, 107, 53, 0.1), transparent 24%);
+  background-attachment: fixed;
+  background-image:
+    radial-gradient(circle at 5% 0%, rgba(71, 215, 172, 0.16), transparent 28%),
+    radial-gradient(circle at 96% 8%, rgba(255, 107, 53, 0.14), transparent 25%),
+    linear-gradient(145deg, #07111f 0%, #0a1628 50%, #07111f 100%);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+::selection {
+  background: rgba(71, 215, 172, 0.32);
+  color: white;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #47d7ac;
+  outline-offset: 3px;
+}
+
+input,
+select,
+textarea {
+  color: #e2e8f0;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: rgba(71, 215, 172, 0.55) !important;
+  background-color: rgba(23, 38, 59, 0.96) !important;
+  box-shadow: 0 0 0 4px rgba(71, 215, 172, 0.1);
+  outline: none;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #091423;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 3px solid #091423;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.44);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
 }

@@ -1,8 +1,16 @@
 import type { Express, Request, Response } from 'express';
 import { prisma } from '../lib/prisma.js';
-import { comparePassword, createSessionToken, hashPassword, hashSessionToken } from '../lib/security.js';
+import {
+  comparePassword,
+  createPasswordResetToken,
+  createSessionToken,
+  hashPassword,
+  hashPasswordResetToken,
+  hashSessionToken
+} from '../lib/security.js';
 
 const sessionDurationMs = 1000 * 60 * 60 * 24 * 7;
+const passwordResetDurationMs = 1000 * 60 * 15;
 
 function publicEmployee(employee: {
   id: string;
@@ -107,6 +115,70 @@ export function registerAuthRoutes(app: Express) {
     }
 
     response.json({ ok: true });
+  });
+
+  app.post('/api/auth/forgot-password', async (request: Request, response: Response) => {
+    const { email } = request.body as { email?: string };
+
+    if (!email) {
+      response.status(400).json({ message: 'Enter the email address for your account.' });
+      return;
+    }
+
+    const employee = await prisma.employee.findUnique({ where: { email: email.toLowerCase() } });
+    if (!employee) {
+      response.status(404).json({ message: 'No account was found for that email address.' });
+      return;
+    }
+
+    const token = createPasswordResetToken();
+    await prisma.passwordResetToken.deleteMany({ where: { employeeId: employee.id, usedAt: null } });
+    await prisma.passwordResetToken.create({
+      data: {
+        employeeId: employee.id,
+        tokenHash: hashPasswordResetToken(token),
+        expiresAt: new Date(Date.now() + passwordResetDurationMs)
+      }
+    });
+
+    response.json({
+      message: 'A recovery code was created. It expires in 15 minutes.',
+      resetToken: token
+    });
+  });
+
+  app.post('/api/auth/reset-password', async (request: Request, response: Response) => {
+    const { email, token, password } = request.body as { email?: string; token?: string; password?: string };
+
+    if (!email || !token || !password) {
+      response.status(400).json({ message: 'Email, recovery code, and a new password are required.' });
+      return;
+    }
+
+    if (password.length < 8) {
+      response.status(400).json({ message: 'Your new password must contain at least 8 characters.' });
+      return;
+    }
+
+    const employee = await prisma.employee.findUnique({ where: { email: email.toLowerCase() } });
+    if (!employee) {
+      response.status(400).json({ message: 'The recovery details are invalid or expired.' });
+      return;
+    }
+
+    const reset = await prisma.passwordResetToken.findUnique({ where: { tokenHash: hashPasswordResetToken(token) } });
+    if (!reset || reset.employeeId !== employee.id || reset.usedAt || reset.expiresAt.getTime() < Date.now()) {
+      response.status(400).json({ message: 'The recovery details are invalid or expired.' });
+      return;
+    }
+
+    await prisma.$transaction([
+      prisma.employee.update({ where: { id: employee.id }, data: { passwordHash: await hashPassword(password) } }),
+      prisma.passwordResetToken.update({ where: { id: reset.id }, data: { usedAt: new Date() } }),
+      prisma.session.deleteMany({ where: { employeeId: employee.id } })
+    ]);
+
+    response.json({ message: 'Password updated. Sign in with your new password.' });
   });
 
   app.get('/api/auth/me', async (request: Request, response: Response) => {

@@ -100,8 +100,9 @@ model Employee {
 	approvedMaintenanceRequests MaintenanceRequest[] @relation("MaintenanceApprovedBy")
 	auditAssignments AuditAssignment[]
 	notifications   Notification[]
-	logs            ActivityLog[]
-	sessions        Session[]
+  logs            ActivityLog[]
+  sessions        Session[]
+  passwordResetTokens PasswordResetToken[]
 	createdAt       DateTime    @default(now())
 	updatedAt       DateTime    @updatedAt
 }
@@ -248,5 +249,15 @@ model Session {
 	employeeId      String
 	employee        Employee   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 	expiresAt       DateTime
-	createdAt       DateTime   @default(now())
+  createdAt       DateTime   @default(now())
+}
+
+model PasswordResetToken {
+  id          String   @id @default(cuid())
+  tokenHash   String   @unique
+  employeeId  String
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime @default(now())
 }
