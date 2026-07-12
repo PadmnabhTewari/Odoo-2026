@@ -1,5 +1,9 @@
 import cors from 'cors';
 import express from 'express';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import dotenv from 'dotenv';
 import { prisma } from './lib/prisma.js';
 import { hashPassword } from './lib/security.js';
 import { registerAuthRoutes } from './routes/auth.js';
@@ -7,12 +11,30 @@ import { registerOverviewRoutes } from './routes/overview.js';
 
 const app = express();
 const port = Number(process.env.PORT ?? 4000);
+const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.resolve(currentDirectory, '../../.env') });
+const clientDistPath = path.resolve(currentDirectory, '../../client/dist');
 
-app.use(cors());
+app.use(
+	cors({
+		origin: process.env.CORS_ORIGIN?.split(',').map((origin) => origin.trim()).filter(Boolean) ?? true
+	})
+);
 app.use(express.json());
 
 registerAuthRoutes(app);
 registerOverviewRoutes(app);
+
+if (existsSync(clientDistPath)) {
+	app.use(express.static(clientDistPath));
+	app.get('*', (_request, response, next) => {
+		if (_request.path.startsWith('/api')) {
+			next();
+			return;
+		}
+		response.sendFile(path.join(clientDistPath, 'index.html'));
+	});
+}
 
 async function seedAdmin() {
 	const adminEmail = process.env.ADMIN_EMAIL ?? 'admin@assetflow.local';
