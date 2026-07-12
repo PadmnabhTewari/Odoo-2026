@@ -1,7 +1,7 @@
 # AssetFlow
 
 Enterprise Asset & Resource Management System.
-
+# Working Prototype: https://odoo-2026-ki0q.onrender.com/
 ## Product Goal
 
 AssetFlow helps organizations track assets, allocate shared resources, manage maintenance, run audits, and surface overdue items from one centralized ERP-style workflow.
